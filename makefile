@@ -13,10 +13,12 @@ EXECNAME = cnn.exe
 
 CFLAGS = -std=c++11 \
 	-c \
+	-Wall \
+	-Wextra \
 	-stdlib=libstdc++ \
-	-I "C:\programs\install\MinGW\include" \
-	-I "C:\programs\install\MinGW\lib\gcc\mingw32\4.7.2\include\c++" \
-	-I "C:\programs\install\MinGW\lib\gcc\mingw32\4.7.2\include\c++\mingw32" \
+	-isystem "C:\programs\install\MinGW\include" \
+	-isystem "C:\programs\install\MinGW\lib\gcc\mingw32\4.7.2\include\c++" \
+	-isystem "C:\programs\install\MinGW\lib\gcc\mingw32\4.7.2\include\c++\mingw32" \
 	-I$(IDIR)
 
 _OBJ = atom_test.o Main_cl.o

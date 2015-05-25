@@ -22,7 +22,7 @@ namespace hash_open_cl{
 
 	// forward declaration
 	void Cleanup(int argc, char **argv, int iExitCode);
-	void checkError(int argc, char **argv, cl_int ciErr, char* msg);
+	void checkError(int argc, char **argv, cl_int ciErr, char const * msg);
 
 
 	// Problem variables
@@ -46,7 +46,6 @@ namespace hash_open_cl{
 		// Allocate and initialize host< c++> arrays
 		dst = (void *)malloc(sizeof(cl_char)* 1024);
 
-#pragma region OpenCL context
 		//Get an OpenCL platform
 		cl_platform_id cpPlatform;
 		ciErr1 = clGetPlatformIDs(1, &cpPlatform, nullptr);
@@ -63,14 +62,12 @@ namespace hash_open_cl{
 		// Create a command-queue
 		cqCommandQueue = clCreateCommandQueue(cxGPUContext, cdDevice, 0, &ciErr1);
 		checkError(argc, argv, ciErr1, "Error in clCreateCommandQueue");
-#pragma endregion
 
 		// Allocate the OpenCL buffers
 		// for source and result on the device GMEM
 		cmDevDst = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE, sizeof(cl_char)* 1024, nullptr, &ciErr1);
 		checkError(argc, argv, ciErr1, "Error in clCreateBuffer");
 
-#pragma region OpenCL kernel
 		// Read the OpenCL kernel in from source file
 		size_t szKernelLength;
 		std::cout << "Reading kernel function from '" << cSourceFile << "'" << '\n';
@@ -93,14 +90,13 @@ namespace hash_open_cl{
 		//cl_kernel clCreateKernel(cl_program  program, const char *kernel_name, cl_int *errcode_ret)
 		ckKernel = clCreateKernel(cpProgram, "HashKernel", &ciErr1);
 		checkError(argc, argv, ciErr1, "Error in clCreateKernel");
-#pragma endregion
 
 		auto repeatCnt = iter_count / szGlobalWorkSize;
 		//void* nullBuffer = malloc(sizeof(cl_char)* 1024);
 		char nullBuffer[sizeof(cl_char)* 1024];
 		memset(nullBuffer, 0, 1024);
 		int per = 0;
-		for (int i = 0; i < repeatCnt; i++){
+		for (ull i = 0; i < repeatCnt; i++){
 			if (i % (repeatCnt / 100) == 0){
 				std::cout << per << " %" << '\n';
 				++per;
@@ -181,7 +177,7 @@ namespace hash_open_cl{
 		exit(iExitCode);
 	}
 
-	void checkError(int argc, char **argv, cl_int ciErr, char* msg){
+	void checkError(int argc, char **argv, cl_int ciErr, char const * msg){
 		if (ciErr != CL_SUCCESS)	{
 			std::cout << msg << "; status: " << ciErr << '\n';
 			Cleanup(argc, argv, EXIT_FAILURE);

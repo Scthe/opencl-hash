@@ -19,12 +19,12 @@ size_t shrRoundUp(int group_size, int global_size)
 	}
 }
 
-// Helper function to init data arrays 
+// Helper function to init data arrays
 // *********************************************************************
 void shrFillArray(float* pfData, int iSize)
 {
 	int i;
-	const float fScale = 1.0f / (float)RAND_MAX;
+	// const float fScale = 1.0f / (float)RAND_MAX;
 	for (i = 0; i < iSize; ++i)
 	{
 		//pfData[i] = fScale * rand();
@@ -42,7 +42,7 @@ void shrFillArray(float* pfData, int iSize)
 //////////////////////////////////////////////////////////////////////////////
 char* oclLoadProgSource(const char* cFilename, const char* cPreamble, size_t* szFinalLength)
 {
-	// locals 
+	// locals
 	FILE* pFileStream = NULL;
 	size_t szSourceLength;
 
@@ -130,7 +130,7 @@ inline void __shrQAFinish(int argc, char **argv, int iStatus)
 		if (!STRCASECMP(string_argv, "qatest")) {
 			bQATest = true;
 		}
-		// For SDK individual samples that don't specify -noprompt or -prompt, 
+		// For SDK individual samples that don't specify -noprompt or -prompt,
 		// a 3 second delay will happen before exiting, giving a user time to view results
 		if (!STRCASECMP(string_argv, "noprompt") || !STRCASECMP(string_argv, "help")) {
 			bNoPrompt = true;
