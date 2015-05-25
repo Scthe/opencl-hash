@@ -33,7 +33,7 @@ namespace hash_open_cl{
 	// main
 	int main(int argc, char **argv){
 		std::cout << "start" << '\n';
-		ull iter_count = pow(16, 9);
+		ull iter_count = ((ull) 1) << (4*9); // 16^9
 
 		// set and log Global and Local work size dimensions
 		size_t szLocalWorkSize = 256;  // 1D var for # of work items in the work group
@@ -41,7 +41,7 @@ namespace hash_open_cl{
 		//( rounded up to the nearest multiple of the LocalWorkSize)
 		size_t szGlobalWorkSize = 256 * 256;// 16^4
 
-		cl_int ciErr1, ciErr2;
+		cl_int ciErr1;
 
 		// Allocate and initialize host< c++> arrays
 		dst = (void *)malloc(sizeof(cl_char)* 1024);
@@ -109,6 +109,8 @@ namespace hash_open_cl{
 			checkError(argc, argv, ciErr1, "Error in clSetKernelArg");
 
 			// Enqueues a command to execute a kernel on a device.
+			/*
+			// copy from host to device
 			ciErr1 = clEnqueueWriteBuffer(cqCommandQueue,	// cl_command_queue command_queue
 										  cmDevDst,	// cl_mem buffer
 										  CL_FALSE,		// cl_bool blocking_write
@@ -118,6 +120,7 @@ namespace hash_open_cl{
 										  0,			// cl_uint num_events_in_wait_list
 										  nullptr,		// const cl_event *event_wait_list
 										  nullptr);		// cl_event *event
+			*/
 
 			// Launch kernel
 			ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue,	// cl_command_queue command_queue
