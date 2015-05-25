@@ -41,7 +41,7 @@ extern "C" {
 
 /*
  * For each extension, follow this template
- * /* cl_VEN_extname extension  */
+ * / * cl_VEN_extname extension  */
 /* #define cl_VEN_extname 1
  * ... define new types, if any
  * ... define new tokens, if any
@@ -51,7 +51,7 @@ extern "C" {
  *  This allows us to avoid having to decide whether to include GL headers or GLES here.
  */
 
-/* 
+/*
  *  cl_khr_gl_event  extension
  *  See section 9.9 in the OpenCL 1.1 spec for more information
  */
