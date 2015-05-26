@@ -5,47 +5,31 @@
 
 #include "opencl\Context.hpp"
 
-// const char* cSourceFile = "./open_cl_kernel.cl";
 const char *cSourceFile = "src/kernel/open_cl_kernel.cl";
 typedef unsigned long long ull;
-
-// forward declaration
-// void Cleanup(int argc, char **argv, int iExitCode);
-// void checkError(int argc, char **argv, cl_int ciErr, char const *msg);
-
-// Problem variables
-void *dst;       // Host buffers for OpenCL test
-cl_mem cmDevDst; // OpenCL device destination buffer
 
 // main
 int main(int argc, char **argv) {
   std::cout << "start" << std::endl;
+
   ull iter_count = ((ull)1) << (4 * 9); // 16^9
 
-  cl_int ciErr1;
+  // opencl context
   opencl::Context context(argc, argv);
   context.init();
-  cl_context* gpu_context = context.raw_context();
 
-  // Allocate and initialize host< c++> arrays
-  dst = (void *)malloc(sizeof(cl_char) * 1024);
-
-  // Allocate the OpenCL buffers
-  // for source and result on the device GMEM
-  // TODO allocate through custom class for better cleanup
-  cmDevDst = clCreateBuffer(*gpu_context, CL_MEM_READ_WRITE,
-                            sizeof(cl_char) * 1024, nullptr, &ciErr1);
-  context.check_error(ciErr1, "Error in clCreateBuffer");
+  // memory allocation - both CPU & GPU
+  void* cpu_buf = (void *)malloc(sizeof(cl_char) * 1024);
+  auto gpu_buf = context.allocate(CL_MEM_READ_WRITE, sizeof(cl_char) * 1024, nullptr);
   std::cout << "cpu/gpu buffers pair allocated" << std::endl;
 
-  opencl::KernelHandler* kernel = context.create_kernel(cSourceFile);
+  // kernel
+  opencl::KernelHandler* kernel = context.create_kernel(cSourceFile, "HashKernel");
 
   size_t szGlobalWorkSize = 256*256; // TODO ??
-  auto repeatCnt = iter_count / szGlobalWorkSize;
-  char nullBuffer[sizeof(cl_char) * 1024];
-  memset(nullBuffer, 0, 1024);
-  int percent_done = 0;
 
+  auto repeatCnt = iter_count / szGlobalWorkSize;
+  int percent_done = 0;
   for (ull i = 0; i < repeatCnt; i++) {
     // report progress
     if (i % (repeatCnt / 100) == 0) {
@@ -57,7 +41,7 @@ int main(int argc, char **argv) {
       ++percent_done;
     }
 
-    kernel->push_arg(sizeof(cl_mem), (void *)&cmDevDst);
+    kernel->push_arg(sizeof(cl_mem), (void *)&gpu_buf->handle);
     kernel->push_arg(sizeof(cl_int), (void *)&i);
 
     // Launch kernel
@@ -66,50 +50,20 @@ int main(int argc, char **argv) {
 
     // Synchronous/blocking read of results
     // context.read_buffer(cmDevDst,0,sizeof(cl_char) * 1024, dst, true,finish_token,1);
-    context.read_buffer(cmDevDst,0,sizeof(cl_char) * 1024, dst, true);
+    context.read_buffer(gpu_buf, 0, sizeof(cl_char) * 1024, cpu_buf, true);
 
     // done
-    auto dst_c = (char *)dst;
-    if (*dst_c == 'f') {
-      std::cout << std::endl << dst_c << std::endl;
+    char* result_buffer = (char *)cpu_buf;
+    if (*result_buffer == 'f') {
+      std::cout << std::endl << result_buffer << std::endl;
       break;
     }
   }
 
+  free(cpu_buf);
   std::cout << "--end--" << std::endl;
+
   system("pause");
 
-  clReleaseMemObject(cmDevDst);
-  free(dst);
-  // Cleanup and leave
-  // Cleanup(argc, argv, EXIT_SUCCESS);
-
   exit(EXIT_SUCCESS);
-  // return 0;
 }
-
-/*
-void Cleanup(int argc, char **argv, int iExitCode) {
-  // Cleanup allocated objects
-  std::cout << "Starting Cleanup" << '\n';
-  if (cSourceCL)
-    free(cSourceCL);
-  if (ckKernel)
-    clReleaseKernel(ckKernel);
-  if (cpProgram)
-    clReleaseProgram(cpProgram);
-  if (cqCommandQueue)
-    clReleaseCommandQueue(cqCommandQueue);
-  if (cxGPUContext)
-    clReleaseContext(cxGPUContext);
-  if (cmDevDst)
-    clReleaseMemObject(cmDevDst);
-
-  // Free host memory
-  free(dst);
-
-  __shrQAFinish(argc, argv,
-                (iExitCode == EXIT_SUCCESS) ? QA_PASSED : QA_FAILED);
-  exit(iExitCode);
-}
-*/

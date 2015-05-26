@@ -2,19 +2,14 @@
 #define OPENCL_CONTEXT_H_
 
 #include "CL/opencl.h"
-#include <vector>
+#include <vector> // TODO remove vector import
 
+#define MAX_KERNEL_COUNT 32
+#define MAX_ALLOCATIONS_COUNT 32
 
 namespace opencl {
 
 class Context;
-
-// 1D var for # of work items in the work group
-// size_t szLocalWorkSize;
-
-// 1D var for Total # of work items
-//( rounded up to the nearest multiple of the LocalWorkSize)
-// size_t szGlobalWorkSize;
 
 struct PlatformInfo{
   char name[1024];
@@ -30,18 +25,24 @@ struct DeviceInfo{
   char name[1024];
 };
 
-// TODO add const
 struct KernelHandler{
     KernelHandler();
-    ~KernelHandler();
     void push_arg(size_t arg_size, const void *);
-    cl_kernel* kernel(){ return &kernel_id;}
-
 
     cl_kernel kernel_id;
     cl_program program_id;
     int arg_stack_size = 0;
     Context* context;
+};
+
+struct MemoryHandler{
+  MemoryHandler();
+  void release();
+
+  cl_mem handle;
+
+  private:
+    bool released;
 };
 
 class Context {
@@ -50,14 +51,16 @@ public:
   Context(int argc, char **argv);
   ~Context();
   void init();
-
-  void display_opencl_info();
-  KernelHandler* create_kernel(char const *);
-  cl_context* raw_context(){return &_clcontext;}
   void check_error(cl_int, char const *);
+
+  // execution
+  MemoryHandler* allocate(cl_mem_flags, size_t, void *);
+  KernelHandler* create_kernel(char const * file_path, char const *main_f="main");
   cl_event execute_kernel(KernelHandler*, cl_event* es=nullptr, int event_count=0);
-  cl_event read_buffer(cl_mem, size_t offset, size_t size, void *dst,
+  cl_event read_buffer(MemoryHandler*, size_t offset, size_t size, void *dst,
                        bool block, cl_event* es=nullptr, int event_count=0);
+  // info
+  void display_opencl_info();
 
 private:
   void _cleanup();
@@ -65,15 +68,17 @@ private:
   DeviceInfo device_info(cl_device_id);
 
 private:
+  bool initialized;
   int argc;
   char **argv;
 
-  cl_device_id _cldevice;           // OpenCL device
-  cl_context _clcontext;         // OpenCL context
-  cl_command_queue _clcommand_queue; // OpenCL command queue
-  // std::vector<KernelHandler> _kernels;
-  KernelHandler _kernels[32];
-  size_t _kernel_count = 0;
+  cl_device_id _cldevice;
+  cl_context _clcontext;
+  cl_command_queue _clcommand_queue;
+  KernelHandler _kernels[MAX_KERNEL_COUNT];
+  size_t _kernel_count;
+  MemoryHandler _allocations[MAX_ALLOCATIONS_COUNT];
+  size_t _allocation_count;
 };
 }
 

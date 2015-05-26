@@ -12,6 +12,7 @@ EXECNAME = cnn.exe
 
 CFLAGS = -std=c++11 \
 	-c \
+	-g \
 	-Wall \
 	-Wextra \
 	-stdlib=libstdc++ \
@@ -32,6 +33,7 @@ OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ)) # append ODIR to each entry
 $(EXECNAME): $(OBJ)
 	@echo Linking..
 	g++ -o $(BINDIR)/$@ $^ $(LFLAGS) $(LIBS)
+	@echo Done
 
 compile: $(OBJ)
 	@echo --end--
