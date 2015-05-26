@@ -2,9 +2,8 @@
 # $^ - right side of ':'
 # $< - first of dependencies
 
-# CFG
 CC = clang++
-SRCDIR = src
+VPATH = src/opencl
 IDIR = libs/include
 ODIR = obj
 BINDIR = bin
@@ -25,7 +24,8 @@ LFLAGS = -std=c++11 \
 	-l "stdc++" \
 	-I$(IDIR)
 
-_OBJ = Main_cl.o
+# _OBJ = Main_cl.o
+_OBJ = Context.o
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ)) # append ODIR to each entry
 
 
@@ -37,10 +37,10 @@ $(EXECNAME): $(OBJ)
 compile: $(OBJ)
 	@echo --end--
 
-link: $(EXECNAME)
+build: $(EXECNAME)
 	@echo --end--
 
-$(ODIR)/%.o: $(SRCDIR)/%.cpp
+$(ODIR)/%.o: %.cpp
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 run: $(EXECNAME)
