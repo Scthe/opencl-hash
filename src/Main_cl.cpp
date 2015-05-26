@@ -38,9 +38,7 @@ int main(int argc, char **argv) {
   context.check_error(ciErr1, "Error in clCreateBuffer");
   std::cout << "cpu/gpu buffers pair allocated" << std::endl;
 
-  // kernel
   opencl::KernelHandler* kernel = context.create_kernel(cSourceFile);
-  std::cout << "kernel created" << std::endl;
 
   size_t szGlobalWorkSize = 256*256; // TODO ??
   auto repeatCnt = iter_count / szGlobalWorkSize;
@@ -48,21 +46,19 @@ int main(int argc, char **argv) {
   memset(nullBuffer, 0, 1024);
   int percent_done = 0;
 
-/*
   for (ull i = 0; i < repeatCnt; i++) {
-
     // report progress
     if (i % (repeatCnt / 100) == 0) {
-      std::cout << percent_done << "%" << std::endl;
+      std::cout << "\r[";
+      for(auto i=0; i<10;i++){
+        std::cout << (percent_done > i * 10 ? "=":" ");
+      }
+      std::cout << "] " << percent_done << "%";
       ++percent_done;
     }
 
-    // Set the Argument values
-    // cl_int clSetKernelArg(cl_kernel kernel, cl_uint arg_index, size_t
-    // arg_size, const void *arg_value)
     kernel->push_arg(sizeof(cl_mem), (void *)&cmDevDst);
     kernel->push_arg(sizeof(cl_int), (void *)&i);
-
 
     // Launch kernel
     //cl_event finish_token = context.execute_kernel(kernel);
@@ -72,41 +68,13 @@ int main(int argc, char **argv) {
     // context.read_buffer(cmDevDst,0,sizeof(cl_char) * 1024, dst, true,finish_token,1);
     context.read_buffer(cmDevDst,0,sizeof(cl_char) * 1024, dst, true);
 
-    /*
-    ciErr1 = clEnqueueNDRangeKernel(
-        cqCommandQueue,    // cl_command_queue command_queue
-        ckKernel,          // cl_kernel kernel
-        1,                 // cl_uint work_dim
-        nullptr,           // const size_t *global_work_offset
-        &szGlobalWorkSize, // const size_t *global_work_size
-        &szLocalWorkSize,  // const size_t *local_work_size
-        0,                 // cl_uint num_events_in_wait_list
-        nullptr,           // const cl_event *event_wait_list
-        nullptr);          // cl_event *event
-    cl_context->check_error(ciErr1, ciErr1, "Error in clEnqueueNDRangeKernel");
-
-    // Synchronous/blocking read of results, and check accumulated errors
-    ciErr1 =
-        clEnqueueReadBuffer(cqCommandQueue, // cl_command_queue command_queue
-                            cmDevDst,       // cl_mem buffer
-                            CL_TRUE,        // cl_bool blocking_write
-                            0,              // size_t offset
-                            sizeof(cl_char) * 1024, // size_t cb
-                            dst,                    // const void *ptr
-                            0,        // cl_uint num_events_in_wait_list
-                            nullptr,  // const cl_event *event_wait_list
-                            nullptr); // cl_event *event
-    cl_context->check_error(ciErr1, ciErr1, "Error in clEnqueueReadBuffer");
-    * /
-
     // done
     auto dst_c = (char *)dst;
     if (*dst_c == 'f') {
-      std::cout << dst_c << '\n';
+      std::cout << std::endl << dst_c << std::endl;
       break;
     }
   }
-*/
 
   std::cout << "--end--" << std::endl;
   system("pause");

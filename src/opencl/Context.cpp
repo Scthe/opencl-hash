@@ -20,11 +20,11 @@ namespace opencl {
 // size_t szLocalWorkSize = 256;
 // size_t szGlobalWorkSize = 256 * 256;
 
-KernelHandler::KernelHandler(Context* context, cl_kernel k, cl_program p)
-    : context(context),
-      kernel_id(k),
-      program_id(p),
-      arg_stack_size(0){
+KernelHandler::KernelHandler()
+    : kernel_id(nullptr),
+      program_id(nullptr),
+      arg_stack_size(0),
+      context(nullptr){
 }
 
 KernelHandler::~KernelHandler(){
@@ -139,7 +139,6 @@ void Context::init() {
   // TODO throw error if someone uses any other methor before init()
   // TODO ad better ability to select platform & device
   cl_int ciErr1;
-  std::cout << "init()" <<std::endl;
 
   // Get an OpenCL platform
   cl_platform_id platform_id;
@@ -157,8 +156,6 @@ void Context::init() {
   // Create a command-queue
   _clcommand_queue = clCreateCommandQueue(_clcontext, _cldevice, 0, &ciErr1);
   check_error(ciErr1, "Error in clCreateCommandQueue");
-
-  std::cout << "~init()" <<std::endl;
 }
 
 void Context::_cleanup(){
@@ -170,6 +167,7 @@ void Context::_cleanup(){
 }
 
 void Context::check_error(cl_int errCode, char const *msg) {
+  // std::cout << "CHECK: " << errCode << ": " << msg << std::endl;
   if (errCode != CL_SUCCESS) {
     std::cout << msg << "; status: " << errCode << std::endl;
     // Cleanup(argc, argv, EXIT_FAILURE);
@@ -186,33 +184,35 @@ KernelHandler* Context::create_kernel(char const *file_path){
   std::cout << "Reading kernel function from '" << file_path << "'" << '\n';
   size_t kernel_len = 0;
   char* kernel_source = oclLoadProgSource(file_path, "", &kernel_len);
-
   std::cout << "Kernel length: " << kernel_len << std::endl;
   check_error(kernel_len > 0 ? CL_SUCCESS : CL_INVALID_PROGRAM, "Error in clCreateProgramWithSource");
 
-  // Create & build the program
-  cl_program clprogram = clCreateProgramWithSource(_clcontext, 1, (const char **)&kernel_source, &kernel_len, &ciErr1);
-  check_error(ciErr1, "Error in clCreateProgramWithSource");
-  // free(kernel_source); // better take care of shader source free
+  KernelHandler* k = _kernels + _kernel_count;
+  k->context = this;
+  ++_kernel_count; // TODO add check if(_kernel_count >= MAX_KERNELS) throw;
 
-  // http://www.khronos.org/registry/cl/sdk/2.0/docs/man/xhtml/clBuildProgram.html
-  ciErr1 = clBuildProgram(clprogram, 1, &_cldevice, nullptr, nullptr, nullptr);
+  // create program
+  k->program_id = clCreateProgramWithSource(_clcontext, 1, (const char **)&kernel_source, &kernel_len, &ciErr1);
+  check_error(ciErr1, "Error in clCreateProgramWithSource");
+  // free(kernel_source); // TODO better take care of shader source free
+
+  // build program
+  ciErr1 = clBuildProgram(k->program_id, 1, &_cldevice, nullptr, nullptr, nullptr);
   if (ciErr1 == CL_BUILD_PROGRAM_FAILURE) {
     size_t length;
     char buffer[2048];
-    clGetProgramBuildInfo(clprogram, _cldevice, CL_PROGRAM_BUILD_LOG,
+    clGetProgramBuildInfo(k->program_id, _cldevice, CL_PROGRAM_BUILD_LOG,
                           sizeof(buffer), buffer, &length);
     std::cout << "--- Build log ---" << std::endl << buffer << std::endl;
   }
   check_error(ciErr1, "Error in clBuildProgram");
 
   // Create the kernel
-  cl_kernel kernel = clCreateKernel(clprogram, main_function, &ciErr1);
+  k->kernel_id = clCreateKernel(k->program_id, main_function, &ciErr1);
   check_error(ciErr1, "Error in clCreateKernel");
-  KernelHandler k(this,kernel,clprogram);
-  _kernels.push_back(k);
 
-  return &_kernels[_kernels.size()-1];
+  // std::cout << "kernel created(f) :" <<k->kernel_id<<":"<<k->program_id<< std::endl;
+  return k;
 
 }
 

@@ -32,17 +32,16 @@ struct DeviceInfo{
 
 // TODO add const
 struct KernelHandler{
-    KernelHandler(Context*, cl_kernel, cl_program);
+    KernelHandler();
     ~KernelHandler();
     void push_arg(size_t arg_size, const void *);
     cl_kernel* kernel(){ return &kernel_id;}
 
-  private:
-    Context* context;
+
     cl_kernel kernel_id;
     cl_program program_id;
-  public:
     int arg_stack_size = 0;
+    Context* context;
 };
 
 class Context {
@@ -66,13 +65,15 @@ private:
   DeviceInfo device_info(cl_device_id);
 
 private:
-  int argc = 0;
-  char **argv = nullptr;
+  int argc;
+  char **argv;
 
   cl_device_id _cldevice;           // OpenCL device
   cl_context _clcontext;         // OpenCL context
   cl_command_queue _clcommand_queue; // OpenCL command queue
-  std::vector<KernelHandler> _kernels;
+  // std::vector<KernelHandler> _kernels;
+  KernelHandler _kernels[32];
+  size_t _kernel_count = 0;
 };
 }
 
