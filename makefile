@@ -3,7 +3,7 @@
 # $< - first of dependencies
 
 CC = clang++
-VPATH = src/opencl
+VPATH = src/opencl src
 IDIR = libs/include
 ODIR = obj
 BINDIR = bin
@@ -24,8 +24,7 @@ LFLAGS = -std=c++11 \
 	-l "stdc++" \
 	-I$(IDIR)
 
-# _OBJ = Main_cl.o
-_OBJ = Context.o
+_OBJ = Main_cl.o Context.o
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ)) # append ODIR to each entry
 
 

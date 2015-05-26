@@ -1,19 +1,17 @@
 #include "Context.hpp"
 
 #include <iostream>
-#include <vector>
+#include <stdexcept>
 
 #include "../OpenCL_utils.h" // TODO move to opencl/utils.h
 
 char const* device_type_str[] = {
-  "-", // 0
+  "-",
   "default", // 1
   "CPU", // 2
-  "-", // 3
+  "-",
   "GPU", // 4
-  "-", // 5
-  "-", // 6
-  "-", // 7
+  "-", "-", "-",
   "Accelerator", // 8
 };
 
@@ -22,10 +20,30 @@ namespace opencl {
 // size_t szLocalWorkSize = 256;
 // size_t szGlobalWorkSize = 256 * 256;
 
+KernelHandler::KernelHandler(Context* context, cl_kernel k, cl_program p)
+    : context(context),
+      kernel_id(k),
+      program_id(p),
+      arg_stack_size(0){
+}
+
+KernelHandler::~KernelHandler(){
+  if (kernel_id)
+    clReleaseKernel(kernel_id);
+  if (program_id)
+    clReleaseProgram(program_id);
+}
+
+void KernelHandler::push_arg(size_t arg_size, const void *arg_value){
+  cl_int ciErr1 = clSetKernelArg(kernel_id, arg_stack_size, arg_size, arg_value);
+  context->check_error(ciErr1, "Could not push kernel argument");
+  ++arg_stack_size;
+}
+
 Context::Context(int argc, char **argv):argc(argc), argv(argv){}
 
 Context::~Context() {
-  // perform cleanup
+  this->_cleanup();
 }
 
 void Context::display_opencl_info() {
@@ -118,7 +136,10 @@ DeviceInfo Context::device_info(cl_device_id device_id) {
 }
 
 void Context::init() {
+  // TODO throw error if someone uses any other methor before init()
+  // TODO ad better ability to select platform & device
   cl_int ciErr1;
+  std::cout << "init()" <<std::endl;
 
   // Get an OpenCL platform
   cl_platform_id platform_id;
@@ -136,16 +157,28 @@ void Context::init() {
   // Create a command-queue
   _clcommand_queue = clCreateCommandQueue(_clcontext, _cldevice, 0, &ciErr1);
   check_error(ciErr1, "Error in clCreateCommandQueue");
+
+  std::cout << "~init()" <<std::endl;
+}
+
+void Context::_cleanup(){
+  if (_clcommand_queue)
+    clReleaseCommandQueue(_clcommand_queue);
+  if (_clcontext)
+    clReleaseContext(_clcontext);
+  // note: kernels will be released during _kernels vector destructor
 }
 
 void Context::check_error(cl_int errCode, char const *msg) {
   if (errCode != CL_SUCCESS) {
-    std::cout << msg << "; status: " << errCode << '\n';
+    std::cout << msg << "; status: " << errCode << std::endl;
     // Cleanup(argc, argv, EXIT_FAILURE);
+    this->_cleanup(); // TODO does not clean up gpu buffer
+    throw std::runtime_error("opencl error"); // TODO better error msg
   }
 }
 
-KernelHandler Context::create_kernel(char const *file_path){
+KernelHandler* Context::create_kernel(char const *file_path){
   cl_int ciErr1;
   char const* main_function = "HashKernel";
 
@@ -153,7 +186,6 @@ KernelHandler Context::create_kernel(char const *file_path){
   std::cout << "Reading kernel function from '" << file_path << "'" << '\n';
   size_t kernel_len = 0;
   char* kernel_source = oclLoadProgSource(file_path, "", &kernel_len);
-  // TODO free kernel_source
 
   std::cout << "Kernel length: " << kernel_len << std::endl;
   check_error(kernel_len > 0 ? CL_SUCCESS : CL_INVALID_PROGRAM, "Error in clCreateProgramWithSource");
@@ -161,6 +193,7 @@ KernelHandler Context::create_kernel(char const *file_path){
   // Create & build the program
   cl_program clprogram = clCreateProgramWithSource(_clcontext, 1, (const char **)&kernel_source, &kernel_len, &ciErr1);
   check_error(ciErr1, "Error in clCreateProgramWithSource");
+  // free(kernel_source); // better take care of shader source free
 
   // http://www.khronos.org/registry/cl/sdk/2.0/docs/man/xhtml/clBuildProgram.html
   ciErr1 = clBuildProgram(clprogram, 1, &_cldevice, nullptr, nullptr, nullptr);
@@ -176,14 +209,54 @@ KernelHandler Context::create_kernel(char const *file_path){
   // Create the kernel
   cl_kernel kernel = clCreateKernel(clprogram, main_function, &ciErr1);
   check_error(ciErr1, "Error in clCreateKernel");
-  return kernel;
+  KernelHandler k(this,kernel,clprogram);
+  _kernels.push_back(k);
 
+  return &_kernels[_kernels.size()-1];
+
+}
+
+cl_event Context::execute_kernel(KernelHandler* kernel,
+                                 cl_event* events_to_wait_for,
+                                 int events_to_wait_for_count){
+  // TODO assert kernel.context == this
+  // TODO change work size
+  size_t szLocalWorkSize = 256;
+  size_t szGlobalWorkSize = 256 * 256;
+
+  cl_event finish_token;
+  cl_int ciErr1 = clEnqueueNDRangeKernel(
+      _clcommand_queue, * kernel->kernel(), // what and where to execute
+      1, nullptr, &szGlobalWorkSize, &szLocalWorkSize, // exec groups
+      events_to_wait_for_count, events_to_wait_for, &finish_token); // sync events
+  check_error(ciErr1, "Error in clEnqueueNDRangeKernel");
+
+  kernel->arg_stack_size = 0;
+  return finish_token;
+}
+
+cl_event Context::read_buffer(cl_mem gpu_memory_pointer,
+                              size_t offset, size_t size, void *dst,
+                              bool block,
+                              cl_event* events_to_wait_for,
+                              int events_to_wait_for_count){
+  cl_event finish_token;
+  cl_bool clblock = block? CL_TRUE : CL_FALSE;
+  cl_int ciErr1 = clEnqueueReadBuffer(
+      _clcommand_queue, gpu_memory_pointer, // what and where to execute
+      clblock, // block or not
+      offset, size, dst, // read params: read offset, size and target
+      events_to_wait_for_count, events_to_wait_for, &finish_token); // sync events
+  check_error(ciErr1, "Error in clEnqueueReadBuffer");
+  return finish_token;
 }
 
   //
 }
 
+/*
 int main(int argc, char **argv) {
   opencl::Context context(argc, argv);
   context.display_opencl_info();
 }
+*/
