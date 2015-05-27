@@ -6,15 +6,16 @@
 
 #define MAX_KERNEL_COUNT 32
 #define MAX_ALLOCATIONS_COUNT 32
+#define MAX_INFO_STRING_LEN 256
 
 namespace opencl {
 
 class Context;
 
 struct PlatformInfo{
-  char name[1024];
-  char vendor[1024];
-  char version[1024];
+  char name[MAX_INFO_STRING_LEN];
+  char vendor[MAX_INFO_STRING_LEN];
+  char version[MAX_INFO_STRING_LEN];
 };
 
 struct DeviceInfo{
@@ -22,7 +23,7 @@ struct DeviceInfo{
   cl_bool image_support;
   size_t max_work_group_size;
   cl_device_type type;
-  char name[1024];
+  char name[MAX_INFO_STRING_LEN];
 };
 
 struct KernelHandler{
@@ -51,6 +52,7 @@ public:
   Context(int argc, char **argv);
   ~Context();
   void init();
+  void check_error(bool, char const *);
   void check_error(cl_int, char const *);
 
   // execution
