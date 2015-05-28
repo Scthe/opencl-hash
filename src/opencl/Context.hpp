@@ -1,8 +1,9 @@
 #ifndef OPENCL_CONTEXT_H_
 #define OPENCL_CONTEXT_H_
 
-#include "CL/opencl.h"
 #include <vector> // TODO remove vector import
+#include "CL/opencl.h"
+#include "Kernel.hpp"
 
 #define MAX_KERNEL_COUNT 32
 #define MAX_ALLOCATIONS_COUNT 32
@@ -19,21 +20,13 @@ struct PlatformInfo{
 };
 
 struct DeviceInfo{
-  cl_ulong global_mem_size;
-  cl_bool image_support;
-  size_t max_work_group_size;
   cl_device_type type;
+  cl_uint address_bits;
+  cl_ulong global_mem_size;
+  size_t max_work_group_size;
   char name[MAX_INFO_STRING_LEN];
-};
-
-struct KernelHandler{
-    KernelHandler();
-    void push_arg(size_t arg_size, const void *);
-
-    cl_kernel kernel_id;
-    cl_program program_id;
-    int arg_stack_size = 0;
-    Context* context;
+  size_t work_items_for_dims[3];
+  cl_bool image_support;
 };
 
 struct MemoryHandler{
@@ -57,17 +50,22 @@ public:
 
   // execution
   MemoryHandler* allocate(cl_mem_flags, size_t, void *);
-  KernelHandler* create_kernel(char const * file_path, char const *main_f="main");
-  cl_event execute_kernel(KernelHandler*, cl_event* es=nullptr, int event_count=0);
+  Kernel* create_kernel(char const * file_path, char const *main_f="main");
   cl_event read_buffer(MemoryHandler*, size_t offset, size_t size, void *dst,
                        bool block, cl_event* es=nullptr, int event_count=0);
   // info
   void display_opencl_info();
 
+  // get&set
+  bool was_initialized(){ return initialized; }
+  DeviceInfo device(){ return _device; }
+  PlatformInfo platform(){ return _platform; }
+  cl_command_queue* command_queue(){ return &_clcommand_queue; }
+
 private:
   void _cleanup();
-  void platform_info(cl_platform_id platform_id, PlatformInfo& platform_info, std::vector<DeviceInfo>& devices);
-  DeviceInfo device_info(cl_device_id);
+  void platform_info(cl_platform_id platform_id, PlatformInfo& platform_info, std::vector<DeviceInfo>* devices=nullptr);
+  void device_info(cl_device_id, DeviceInfo&);
 
 private:
   bool initialized;
@@ -77,7 +75,11 @@ private:
   cl_device_id _cldevice;
   cl_context _clcontext;
   cl_command_queue _clcommand_queue;
-  KernelHandler _kernels[MAX_KERNEL_COUNT];
+
+  DeviceInfo _device;
+  PlatformInfo _platform;
+  
+  Kernel _kernels[MAX_KERNEL_COUNT];
   size_t _kernel_count;
   MemoryHandler _allocations[MAX_ALLOCATIONS_COUNT];
   size_t _allocation_count;

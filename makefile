@@ -25,7 +25,7 @@ LFLAGS = -std=c++11 \
 	-l "stdc++" \
 	-I$(IDIR)
 
-_OBJ = Main_cl.o Context.o UtilsOpenCL.o
+_OBJ = Main_cl.o Context.o UtilsOpenCL.o Kernel.o
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ)) # append ODIR to each entry
 
 .ONESHELL:

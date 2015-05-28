@@ -5,7 +5,7 @@
 
 #include "UtilsOpenCL.hpp"
 
-char const* device_type_str[] = {
+char const* device_type_str[] = { // TODO move to utils
   "-",
   "default", // 1
   "CPU", // 2
@@ -16,25 +16,6 @@ char const* device_type_str[] = {
 };
 
 namespace opencl {
-
-//
-// KernelHandler
-//
-
-KernelHandler::KernelHandler()
-    : kernel_id(nullptr),
-      program_id(nullptr),
-      arg_stack_size(0),
-      context(nullptr){
-}
-
-void KernelHandler::push_arg(size_t arg_size, const void *arg_value){
-  cl_int ciErr1 = clSetKernelArg(kernel_id, arg_stack_size,
-                                 arg_size, arg_value);
-  context->check_error(ciErr1, "Could not push kernel argument");
-  ++arg_stack_size;
-}
-
 
 //
 // MemoryHandler
@@ -77,11 +58,13 @@ void Context::init() {
   cl_platform_id platform_id;
   ciErr1 = clGetPlatformIDs(1, &platform_id, nullptr);
   check_error(ciErr1, "Error in clGetPlatformID");
+  platform_info(platform_id, this->_platform);
 
   // Get the devices
   ciErr1 = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_GPU,
              1, &_cldevice, nullptr);
   check_error(ciErr1, "Error in clGetDeviceIDs");
+  device_info(_cldevice, this->_device);
 
   // Create the context
   _clcontext = clCreateContext(0, 1, &_cldevice, nullptr, nullptr, &ciErr1);
@@ -97,11 +80,7 @@ void Context::init() {
 void Context::_cleanup(){
   // kernels
   for(size_t i = 0; i < _kernel_count; i++){
-    KernelHandler* k = _kernels + i;
-    if (k->kernel_id)
-      clReleaseKernel(k->kernel_id);
-    if (k->program_id)
-      clReleaseProgram(k->program_id);
+    _kernels[i].cleanup();
   }
 
   // memory
@@ -129,7 +108,7 @@ void Context::check_error(cl_int errCode, char const *msg) {
 }
 
 void Context::check_error(bool check, char  const *msg){
-  this->check_error(check? CL_SUCCESS : CL_INVALID_PROGRAM, msg);
+  this->check_error(check? CL_SUCCESS : -100, msg);
 }
 
 
@@ -149,11 +128,19 @@ MemoryHandler* Context::allocate(cl_mem_flags flags,
   return k;
 }
 
-KernelHandler* Context::create_kernel(char const *file_path,
+Kernel* Context::create_kernel(char const *file_path,
                                       char const *main_f){
   check_error(initialized, "Context was not initialized");
+  check_error(_kernel_count < MAX_KERNEL_COUNT,
+    "Wrapper hit kernel limit, increase MAX_KERNEL_COUNT");
   std::cout << "Reading kernel function from '" << file_path << "'" << std::endl;
   cl_int ciErr1;
+
+  Kernel* k = _kernels + _kernel_count;
+  ++_kernel_count;
+
+  // TODO better manage the resources: kernel_source, program_id, kernel_id
+  // (if code crashes there is going to be a leak !)
 
   // Read the OpenCL kernel from source file
   size_t kernel_len = 0;
@@ -161,59 +148,35 @@ KernelHandler* Context::create_kernel(char const *file_path,
   std::cout << "Kernel length: " << kernel_len << std::endl;
   check_error(kernel_len > 0, "Could not read file");
 
-  check_error(_kernel_count < MAX_KERNEL_COUNT,
-    "Wrapper hit kernel limit, increase MAX_KERNEL_COUNT");
-  KernelHandler* k = _kernels + _kernel_count;
-  ++_kernel_count;
-  k->context = this;
-
-
   // create program
-  k->program_id = clCreateProgramWithSource(_clcontext,
+  cl_program program_id = clCreateProgramWithSource(_clcontext,
                     1, (const char **)&kernel_source, &kernel_len, &ciErr1);
   check_error(ciErr1, "Error in clCreateProgramWithSource");
-  free(kernel_source); // TODO better take care of shader source free
+  free(kernel_source);
 
   // build program
-  ciErr1 = clBuildProgram(k->program_id, 1, &_cldevice,
+  ciErr1 = clBuildProgram(program_id, 1, &_cldevice,
                           nullptr, nullptr, nullptr);
   if (ciErr1 == CL_BUILD_PROGRAM_FAILURE) {
     size_t length;
     char buffer[2048];
-    clGetProgramBuildInfo(k->program_id, _cldevice, CL_PROGRAM_BUILD_LOG,
+    clGetProgramBuildInfo(program_id, _cldevice, CL_PROGRAM_BUILD_LOG,
                           sizeof(buffer), buffer, &length);
     std::cout << "--- Build log ---" << std::endl << buffer << std::endl;
   }
   check_error(ciErr1, "Error in clBuildProgram");
 
   // Create the kernel
-  k->kernel_id = clCreateKernel(k->program_id, main_f, &ciErr1);
+  cl_kernel kernel_id = clCreateKernel(program_id, main_f, &ciErr1);
   check_error(ciErr1, "Error in clCreateKernel");
+  size_t max_work_group_size;
+  ciErr1 = clGetKernelWorkGroupInfo(kernel_id, _cldevice,
+     CL_KERNEL_WORK_GROUP_SIZE, 1024, &max_work_group_size, nullptr);
+
+  k->init(this, kernel_id, program_id, max_work_group_size);
 
   // std::cout << "kernel created(f) :" <<k->kernel_id<<":"<<k->program_id<< std::endl;
   return k;
-}
-
-cl_event Context::execute_kernel(KernelHandler* kernel,
-                                 cl_event* events_to_wait_for,
-                                 int events_to_wait_for_count){
-  check_error(initialized, "Context was not initialized");
-  check_error(kernel->context == this, "Kernel context mismatch:"
-    "tried to execute kernel from context A using context B");
-
-  // TODO change work size
-  size_t szLocalWorkSize = 256;
-  size_t szGlobalWorkSize = 256 * 256;
-
-  kernel->arg_stack_size = 0; // prepare for next invoke
-
-  cl_event finish_token;
-  cl_int ciErr1 = clEnqueueNDRangeKernel(
-    _clcommand_queue, kernel->kernel_id,  // what and where to execute
-    1, nullptr, &szGlobalWorkSize, &szLocalWorkSize, // work dim, exec groups
-    events_to_wait_for_count, events_to_wait_for, &finish_token);// sync events
-  check_error(ciErr1, "Error in clEnqueueNDRangeKernel");
-  return finish_token;
 }
 
 cl_event Context::read_buffer(MemoryHandler* gpu_buffer,
@@ -259,7 +222,7 @@ void Context::display_opencl_info() {
   std::vector<DeviceInfo> devices;
   for (auto i = begin(platform_ids); i != end(platform_ids); ++i) {
     devices.clear();
-    this->platform_info(*i, platform_info, devices);
+    this->platform_info(*i, platform_info, &devices);
     std::cout << "  " << platform_info.vendor
               << "::" << platform_info.name
               << ", version " << platform_info.version << std::endl;
@@ -280,7 +243,7 @@ void Context::display_opencl_info() {
 
 void Context::platform_info(cl_platform_id platform_id,
                             PlatformInfo& platform_info,
-                            std::vector<DeviceInfo>& devices) {
+                            std::vector<DeviceInfo>* devices) {
   size_t value_size = 0;
   cl_int ciErr1;
   // get base info
@@ -294,6 +257,11 @@ void Context::platform_info(cl_platform_id platform_id,
     sizeof(platform_info.version), &platform_info.version, &value_size);
   platform_info.version[value_size] = '\0';
   check_error(ciErr1, "Could not get platform details");
+
+  if(!devices){
+    // no reason to read device data
+    return;
+  }
 
   // get device count
   cl_uint device_count = 0;
@@ -314,13 +282,14 @@ void Context::platform_info(cl_platform_id platform_id,
   check_error(ciErr1, "Could not get device ids");
 
   for (auto i = begin(device_ids); i != end(device_ids); ++i) {
-    devices.push_back(this->device_info(*i));
+    DeviceInfo d;
+    this->device_info(*i, d);
+    devices->push_back(d);
   }
 }
 
-DeviceInfo Context::device_info(cl_device_id device_id) {
+void Context::device_info(cl_device_id device_id, DeviceInfo& info) {
 // https://www.khronos.org/registry/cl/sdk/1.0/docs/man/xhtml/clGetDeviceInfo.html
-  DeviceInfo info;
   cl_int ciErr1;
   size_t value_size = 0;
   ciErr1 =  clGetDeviceInfo(device_id, CL_DEVICE_GLOBAL_MEM_SIZE,
@@ -329,13 +298,16 @@ DeviceInfo Context::device_info(cl_device_id device_id) {
                             1024, &info.image_support, nullptr);
   ciErr1 |= clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE,
                             1024, &info.max_work_group_size, nullptr);
+  ciErr1 |= clGetDeviceInfo(device_id, CL_DEVICE_ADDRESS_BITS,
+                            1024, &info.address_bits, nullptr);
+  ciErr1 |= clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_ITEM_SIZES,
+                            1024, &info.work_items_for_dims, nullptr);
   ciErr1 |= clGetDeviceInfo(device_id, CL_DEVICE_TYPE,
                             1024, &info.type, nullptr);
   ciErr1 |= clGetDeviceInfo(device_id, CL_DEVICE_NAME,
                             sizeof(info.name), &info.name, &value_size);
   info.name[value_size] = '\0';
   check_error(ciErr1, "Could not get device data");
-  return info;
 }
 
 }

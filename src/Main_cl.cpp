@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
   unsigned int positions_to_fill = 2;
 
   // kernel
-  opencl::KernelHandler* kernel = context.create_kernel(cSourceFile);
+  auto kernel = context.create_kernel(cSourceFile);
 
   // [C][C][C][G][G][G][G][_][_]
   //
@@ -41,11 +41,13 @@ int main(int argc, char **argv) {
   // crash:
   // https://devtalk.nvidia.com/default/topic/471020/driver-crashs-while-opencl-app-is-running/
 
-  size_t szGlobalWorkSize = 256*256; // TODO ??
+  size_t global_work_size = 256*256, // TODO ??
+         local_work_size = 256;
+
   // 2^36 / 2^16 / 2**8 = 2**12 = 4096
-  auto repeatCnt = iter_count / szGlobalWorkSize / (1 << (positions_to_fill * 4) );
+  auto repeatCnt = iter_count / global_work_size / (1 << (positions_to_fill * 4) );
   // std::cout << "repeatCnt: " << repeatCnt << std::endl;
-  size_t percent_done = 0, repeats_per_percent = repeatCnt / 100 + 1;
+  int percent_done = 0, repeats_per_percent = repeatCnt / 100 + 1;
   for (ull i = 0; i < repeatCnt; i++) {
     // report progress
     if (i % repeats_per_percent == 0) {
@@ -64,7 +66,7 @@ int main(int argc, char **argv) {
     kernel->push_arg(sizeof(cl_int), (void *)&positions_to_fill);
 
     // Launch kernel
-    cl_event finish_token = context.execute_kernel(kernel);
+    cl_event finish_token = kernel->execute(1, &global_work_size, &local_work_size);
 
     // Synchronous/blocking read of results
     context.read_buffer(gpu_buf, 0, sizeof(cl_char) * 9, cpu_buf, true, &finish_token, 1);
