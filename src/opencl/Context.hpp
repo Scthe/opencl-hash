@@ -14,12 +14,18 @@ namespace opencl {
 
 class Context;
 
+/**
+ * base information about platform
+ */
 struct PlatformInfo{
   char name[MAX_INFO_STRING_LEN];
   char vendor[MAX_INFO_STRING_LEN];
   char version[MAX_INFO_STRING_LEN];
 };
 
+/**
+ * base information about device
+ */
 struct DeviceInfo{
   cl_device_type type;
   char name[MAX_INFO_STRING_LEN];
@@ -30,6 +36,9 @@ struct DeviceInfo{
   cl_bool image_support;
 };
 
+/**
+ * opencl memory handle
+ */
 struct MemoryHandler{
   MemoryHandler();
   void release();
@@ -40,6 +49,11 @@ struct MemoryHandler{
     bool released;
 };
 
+
+/**
+ * Base class for interaction with opencl.
+ * Remember to call init!
+ */
 class Context {
 
 public:
@@ -49,21 +63,96 @@ public:
   void check_error(bool, char const *);
   void check_error(cl_int, char const *);
 
+  //
   // execution
+  //
+
+  /**
+   * Allocate memory on opencl device
+   * https://www.khronos.org/registry/cl/sdk/1.1/docs/man/xhtml/clCreateBuffer.html
+   *
+   * @param  flags    opencl flags
+   * @param  size     bytest to allocate. Use f.e. sizeof(cl_char) * COUNT
+   * @param  host_ptr
+   * @return          handler used by context
+   */
   MemoryHandler* allocate(cl_mem_flags, size_t, void *);
+
+  /**
+   * Create kernel from file
+   *
+   * @param  file_path path to .cl file that contains source code
+   * @param  cmp_opt   [OPT] compilation options f.e. macros
+   * @param  main_f    [OPT] name of main kernel function
+   * @return           kernel object
+   */
   Kernel* create_kernel(char const *file_path,
                         char const *cmp_opt=nullptr, char const *main_f="main");
+
+  /**
+   * Read buffer from opencl device and copy it to host memory
+   *
+   * @param  gpu_buffer               source buffer
+   * @param  offset                   buffer offset
+   * @param  size                     how much to read
+   * @param  dst                      destination buffer
+   * @param  block                    blocking/nonblocking operation switch
+   * @param  events_to_wait_for       wait for other operations to finish
+   * @param  events_to_wait_for_count
+   * @return                          opencl event object
+   */
   cl_event read_buffer(MemoryHandler*, size_t offset, size_t size, void *dst,
                        bool block, cl_event* es=nullptr, int event_count=0);
+
+   /**
+    * Copy data from host memory to opencl device
+    *
+    * @param  gpu_buffer               destination buffer
+    * @param  offset                   buffer offset
+    * @param  size                     how much to read
+    * @param  src                      source buffer
+    * @param  block                    blocking/nonblocking operation switch
+    * @param  events_to_wait_for       wait for other operations to finish
+    * @param  events_to_wait_for_count
+    * @return                          opencl event object
+    */
   cl_event write_buffer(MemoryHandler*, size_t offset, size_t size, void *src,
                       bool block, cl_event* es=nullptr, int event_count=0);
+
+  //
   // info
+  //
+
+  /**
+   * print to stdout platform and devices information
+   */
   void display_opencl_info();
 
+  //
   // get&set
+  //
+
+  /**
+   * was context initialized ? AKA can I use any cmds beside info gathering ?
+   */
   bool was_initialized(){ return initialized; }
+
+  /**
+   * device that this context is bound to
+   */
   DeviceInfo device(){ return _device; }
+
+  /**
+   * platform that this context is bound to
+   */
   PlatformInfo platform(){ return _platform; }
+
+
+  /**
+   * command queue. This may be called leaky abstraction, but it's not like
+   * we don't expose more advanced stuff (f.e. max_work_group_size).
+   * Also You probably will not have any use of raw command_queue.
+   */
   cl_command_queue* command_queue(){ return &_clcommand_queue; }
 
 private:

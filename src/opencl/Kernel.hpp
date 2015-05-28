@@ -13,16 +13,30 @@ class Kernel {
   void init(Context *, cl_kernel, cl_program, size_t max_work_group_size);
   void cleanup();
 
+  /**
+   * Set the next argument. To be used as a sequence of calls,
+   * where each one sets next argument.
+   *
+   * @param arg_size  size of pointer f.e. sizeof(cl_mem) | sizeof(cl_int)
+   * @param arg_value void* pointer to argument value
+   */
   void push_arg(size_t arg_size, const void *);
 
   /**
-   * run the kernel
-   * @param  work_dim           [description]
-   * @param  global_work_size   [description]
-   * @param  local_work_size    [may be NULL]
-   * @param  es                 [description]
-   * @param  event_count        [description]
-   * @return                    [description]
+   * Execute the kernel with arguments that were pushed before this call.
+   * After this call You will have to provide all arguments againg before
+   * You execute the kernel again.
+   * Also this function provides some basics checks for work_size parameters,
+   * so You can catch them more easily.
+   *
+   * @param  work_dim                 number of dimensions
+   * @param  global_work_size         :size_t*, total work size provided as
+   *array
+   *each value for one of dimensions
+   * @param  local_work_size          :size_t*, work group size
+   * @param  events_to_wait_for       wait for other operations to finish
+   * @param  events_to_wait_for_count
+   * @return                          opencl event object
    */
   cl_event execute(cl_uint work_dim,                //
                    const size_t *global_work_size,  //
@@ -31,7 +45,9 @@ class Kernel {
 
  private:
   /**
+   * Basic checks for work parameters. Based on:
    * https://www.khronos.org/registry/cl/sdk/1.0/docs/man/xhtml/clEnqueueNDRangeKernel.html
+   *
    * @return                  if work parameters fulfill the constraints
    */
   void check_work_parameters(cl_uint work_dim,  //

@@ -6,6 +6,9 @@
 namespace opencl {
 namespace utils {
 
+/**
+ * cl_device_type is a number so we will change it to string
+ */
 extern char const* device_type_str[9];
 
 /**
@@ -19,6 +22,12 @@ a set of #defines or a header
 char* load_file(const char* cFilename, const char* cPreamble,
                 size_t* szFinalLength);
 
+/**
+ * convert error code to string
+ *
+ * @param  cl_int :cl_int, error code
+ * @return        :string
+ */
 const char* get_opencl_error_str(cl_int);
 }
 }
