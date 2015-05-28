@@ -25,26 +25,31 @@ LFLAGS = -std=c++11 \
 	-l "stdc++" \
 	-I$(IDIR)
 
-_OBJ = Main_cl.o Context.o
+_OBJ = Main_cl.o Context.o UtilsOpenCL.o
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ)) # append ODIR to each entry
 
+.ONESHELL:
 
 # default target
 $(EXECNAME): $(OBJ)
+	#
 	@echo Linking..
 	g++ -o $(BINDIR)/$@ $^ $(LFLAGS) $(LIBS)
 	@echo Done
 
 compile: $(OBJ)
+	#
 	@echo --end--
 
 build: $(EXECNAME)
+	#
 	@echo --end--
 
 $(ODIR)/%.o: %.cpp
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 run: $(EXECNAME)
+	# set CUDA_CACHE_DISABLE=1
 	$(BINDIR)/$<
 
 clean:

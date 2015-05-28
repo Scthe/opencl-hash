@@ -3,7 +3,7 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "utils.h"
+#include "UtilsOpenCL.hpp"
 
 char const* device_type_str[] = {
   "-",
@@ -120,7 +120,9 @@ void Context::_cleanup(){
 void Context::check_error(cl_int errCode, char const *msg) {
   // std::cout << "CHECK: " << errCode << ": " << msg << std::endl;
   if (errCode != CL_SUCCESS) {
-    std::cout << msg << "; status: " << errCode << std::endl;
+    std::cout << msg
+              << "[" << errCode << "]: "
+              << utils::get_opencl_error_str(errCode) << std::endl;
     this->_cleanup(); // TODO does not clean up gpu buffers
     throw std::runtime_error("opencl error"); // TODO better error msg
   }
@@ -155,7 +157,7 @@ KernelHandler* Context::create_kernel(char const *file_path,
 
   // Read the OpenCL kernel from source file
   size_t kernel_len = 0;
-  char* kernel_source = load_file(file_path, "", &kernel_len);
+  char* kernel_source = utils::load_file(file_path, "", &kernel_len);
   std::cout << "Kernel length: " << kernel_len << std::endl;
   check_error(kernel_len > 0, "Could not read file");
 
@@ -228,7 +230,7 @@ cl_event Context::read_buffer(MemoryHandler* gpu_buffer,
     clblock,           // block or not
     offset, size, dst, // read params: offset, size and target
     events_to_wait_for_count, events_to_wait_for, &finish_token); // sync events
-  check_error(ciErr1, "Error in clEnqueueReadBuffer");
+  check_error(ciErr1, "Error in read buffer");
   return finish_token;
 }
 

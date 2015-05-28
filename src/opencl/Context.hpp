@@ -51,7 +51,7 @@ class Context {
 public:
   Context(int argc, char **argv);
   ~Context();
-  void init();
+  void init(); // TODO int clDeviceType = CL_DEVICE_TYPE_GPU, int deviceNumber = -1
   void check_error(bool, char const *);
   void check_error(cl_int, char const *);
 
