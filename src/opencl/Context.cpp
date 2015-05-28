@@ -122,7 +122,7 @@ MemoryHandler* Context::allocate(cl_mem_flags flags,
 }
 
 Kernel* Context::create_kernel(char const *file_path,
-                                      char const *main_f){
+                               char const *cmp_opt, char const *main_f){
   check_error(initialized, "Context was not initialized");
   check_error(_kernel_count < MAX_KERNEL_COUNT,
     "Wrapper hit kernel limit, increase MAX_KERNEL_COUNT");
@@ -149,7 +149,7 @@ Kernel* Context::create_kernel(char const *file_path,
 
   // build program
   ciErr1 = clBuildProgram(program_id, 1, &_cldevice,
-                          nullptr, nullptr, nullptr);
+                          cmp_opt, nullptr, nullptr);
   if (ciErr1 == CL_BUILD_PROGRAM_FAILURE) {
     size_t length;
     char buffer[2048];
@@ -187,6 +187,24 @@ cl_event Context::read_buffer(MemoryHandler* gpu_buffer,
     offset, size, dst, // read params: offset, size and target
     events_to_wait_for_count, events_to_wait_for, &finish_token); // sync events
   check_error(ciErr1, "Error in read buffer");
+  return finish_token;
+}
+
+cl_event Context::write_buffer(MemoryHandler* gpu_buffer,
+                              size_t offset, size_t size, void *src,
+                              bool block,
+                              cl_event* events_to_wait_for,
+                              int events_to_wait_for_count){
+  check_error(initialized, "Context was not initialized");
+  cl_event finish_token;
+  cl_bool clblock = block? CL_TRUE : CL_FALSE;
+  cl_mem gpu_memory_pointer = gpu_buffer->handle;
+  cl_int ciErr1 = clEnqueueWriteBuffer(
+    _clcommand_queue, gpu_memory_pointer, // what and where to execute
+    clblock,           // block or not
+    offset, size, src, // read params: offset, size and target
+    events_to_wait_for_count, events_to_wait_for, &finish_token); // sync events
+  check_error(ciErr1, "Error in write buffer");
   return finish_token;
 }
 

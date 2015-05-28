@@ -51,9 +51,12 @@ public:
 
   // execution
   MemoryHandler* allocate(cl_mem_flags, size_t, void *);
-  Kernel* create_kernel(char const * file_path, char const *main_f="main");
+  Kernel* create_kernel(char const *file_path,
+                        char const *cmp_opt=nullptr, char const *main_f="main");
   cl_event read_buffer(MemoryHandler*, size_t offset, size_t size, void *dst,
                        bool block, cl_event* es=nullptr, int event_count=0);
+  cl_event write_buffer(MemoryHandler*, size_t offset, size_t size, void *src,
+                      bool block, cl_event* es=nullptr, int event_count=0);
   // info
   void display_opencl_info();
 
