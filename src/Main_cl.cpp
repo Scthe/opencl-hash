@@ -21,18 +21,34 @@ int main(int argc, char **argv) {
   // memory allocation - both CPU & GPU
   void* cpu_buf = (void *)malloc(sizeof(cl_char) * 1024);
   auto gpu_buf = context.allocate(CL_MEM_READ_WRITE, sizeof(cl_char) * 1024, nullptr);
+  cl_int flag_init = 0;
+  auto gpu_flag = context.allocate(CL_MEM_READ_WRITE, sizeof(cl_int), (void *)&flag_init);
   std::cout << "cpu/gpu buffers pair allocated" << std::endl;
 
+  unsigned int positions_to_fill = 2;
+
   // kernel
-  opencl::KernelHandler* kernel = context.create_kernel(cSourceFile, "HashKernel");
+  opencl::KernelHandler* kernel = context.create_kernel(cSourceFile);
+
+  // [C][C][C][G][G][G][G][_][_]
+  //
+  // each box represents letter position, there are 16 letters possible
+  // we have 4^9 combinations (4 bits/letter)
+  // IF we will run this on szGlobalWorkSize=16^4 threads,
+  // which effectively will itearate over first 4 letter combinations
+  // we will iterate over last 5 letters on GPU
+
+  // crash:
+  // https://devtalk.nvidia.com/default/topic/471020/driver-crashs-while-opencl-app-is-running/
 
   size_t szGlobalWorkSize = 256*256; // TODO ??
-
-  auto repeatCnt = iter_count / szGlobalWorkSize;
-  int percent_done = 0;
+  // 2^36 / 2^16 / 2**8 = 2**12 = 4096
+  auto repeatCnt = iter_count / szGlobalWorkSize / (1 << (positions_to_fill * 4) );
+  // std::cout << "repeatCnt: " << repeatCnt << std::endl;
+  size_t percent_done = 0, repeats_per_percent = repeatCnt / 100 + 1;
   for (ull i = 0; i < repeatCnt; i++) {
     // report progress
-    if (i % (repeatCnt / 100) == 0) {
+    if (i % repeats_per_percent == 0) {
       std::cout << "\r[";
       for(auto i=0; i<10;i++){
         std::cout << (percent_done > i * 10 ? "=":" ");
@@ -41,23 +57,29 @@ int main(int argc, char **argv) {
       ++percent_done;
     }
 
+    // kernel args
     kernel->push_arg(sizeof(cl_mem), (void *)&gpu_buf->handle);
+    kernel->push_arg(sizeof(cl_mem), (void *)&gpu_flag->handle);
     kernel->push_arg(sizeof(cl_int), (void *)&i);
+    kernel->push_arg(sizeof(cl_int), (void *)&positions_to_fill);
 
     // Launch kernel
-    //cl_event finish_token = context.execute_kernel(kernel);
-    context.execute_kernel(kernel);
+    cl_event finish_token = context.execute_kernel(kernel);
 
     // Synchronous/blocking read of results
-    // context.read_buffer(cmDevDst,0,sizeof(cl_char) * 1024, dst, true,finish_token,1);
-    context.read_buffer(gpu_buf, 0, sizeof(cl_char) * 1024, cpu_buf, true);
+    context.read_buffer(gpu_buf, 0, sizeof(cl_char) * 9, cpu_buf, true, &finish_token, 1);
+    // int flag = 0; // TODO use flag for proper thread sync
+    // context.read_buffer(gpu_buf, 0, sizeof(cl_int), (void *)&flag, true, &finish_token, 1);
 
     // done
+    // if(flag){
     char* result_buffer = (char *)cpu_buf;
-    if (*result_buffer == 'f') {
-      std::cout << std::endl << result_buffer << std::endl;
+    if(result_buffer[0] == 'a'){
+      result_buffer[10] = '\0';
+      std::cout << "found: '" << result_buffer << "'" << std::endl;
       break;
     }
+    // }
   }
 
   free(cpu_buf);
