@@ -7,6 +7,16 @@
 namespace opencl {
 namespace utils {
 
+char const *device_type_str[9] = {
+    "-",
+    "default",  // 1
+    "CPU",      // 2
+    "-",
+    "GPU",  // 4
+    "-",           "-", "-",
+    "Accelerator",  // 8
+};
+
 char *load_file(const char *cFilename, const char *cPreamble,
                 size_t *szFinalLength) {
   FILE *pFileStream = NULL;

@@ -2,6 +2,7 @@
 #define OPENCL_CONTEXT_H_
 
 #include <vector> // TODO remove vector import
+#include <iostream>  // TODO remove iostream import ?
 #include "CL/opencl.h"
 #include "Kernel.hpp"
 
@@ -21,10 +22,10 @@ struct PlatformInfo{
 
 struct DeviceInfo{
   cl_device_type type;
-  cl_uint address_bits;
-  cl_ulong global_mem_size;
-  size_t max_work_group_size;
   char name[MAX_INFO_STRING_LEN];
+  cl_ulong global_mem_size;
+  cl_uint address_bits;
+  size_t max_work_group_size;
   size_t work_items_for_dims[3];
   cl_bool image_support;
 };
@@ -78,12 +79,15 @@ private:
 
   DeviceInfo _device;
   PlatformInfo _platform;
-  
+
   Kernel _kernels[MAX_KERNEL_COUNT];
   size_t _kernel_count;
   MemoryHandler _allocations[MAX_ALLOCATIONS_COUNT];
   size_t _allocation_count;
 };
 }
+
+std::ostream& operator<< (std::ostream&, const opencl::PlatformInfo&);
+std::ostream& operator<< (std::ostream&, const opencl::DeviceInfo&);
 
 #endif // OPENCL_CONTEXT_H_

@@ -5,15 +5,6 @@
 
 #include "UtilsOpenCL.hpp"
 
-char const* device_type_str[] = { // TODO move to utils
-  "-",
-  "default", // 1
-  "CPU", // 2
-  "-",
-  "GPU", // 4
-  "-", "-", "-",
-  "Accelerator", // 8
-};
 
 namespace opencl {
 
@@ -59,12 +50,14 @@ void Context::init() {
   ciErr1 = clGetPlatformIDs(1, &platform_id, nullptr);
   check_error(ciErr1, "Error in clGetPlatformID");
   platform_info(platform_id, this->_platform);
+  std::cout << "PLATFORM: " << _platform << std::endl;
 
   // Get the devices
   ciErr1 = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_GPU,
              1, &_cldevice, nullptr);
   check_error(ciErr1, "Error in clGetDeviceIDs");
   device_info(_cldevice, this->_device);
+  std::cout << "DEVICE:" << _device << std::endl;
 
   // Create the context
   _clcontext = clCreateContext(0, 1, &_cldevice, nullptr, nullptr, &ciErr1);
@@ -102,8 +95,8 @@ void Context::check_error(cl_int errCode, char const *msg) {
     std::cout << msg
               << "[" << errCode << "]: "
               << utils::get_opencl_error_str(errCode) << std::endl;
-    this->_cleanup(); // TODO does not clean up gpu buffers
-    throw std::runtime_error("opencl error"); // TODO better error msg
+    this->_cleanup();
+    throw std::runtime_error(msg);
   }
 }
 
@@ -223,18 +216,11 @@ void Context::display_opencl_info() {
   for (auto i = begin(platform_ids); i != end(platform_ids); ++i) {
     devices.clear();
     this->platform_info(*i, platform_info, &devices);
-    std::cout << "  " << platform_info.vendor
-              << "::" << platform_info.name
-              << ", version " << platform_info.version << std::endl;
+    std::cout << "  " << platform_info << std::endl;
     std::cout << "  devices:" << std::endl;
     // devices
     for (auto j = begin(devices); j != end(devices); ++j) {
-      std::cout << "     "  << device_type_str[j->type]
-                << "::" << j->name
-                << ", memory: " << (j->global_mem_size / 1024 / 1024) << "MB"
-                << ", image support: " << (j->image_support==CL_TRUE?"YES":"NO")
-                << ", max work group size: " << j->max_work_group_size
-                << std::endl;
+      std::cout << "    " << (*j) << std::endl;
     }
   }
 
@@ -310,6 +296,25 @@ void Context::device_info(cl_device_id device_id, DeviceInfo& info) {
   check_error(ciErr1, "Could not get device data");
 }
 
+}
+
+std::ostream& operator<< (std::ostream& os, const opencl::PlatformInfo& platform_info){
+  os << platform_info.vendor
+     << "::" << platform_info.name
+     << ", version " << platform_info.version;
+  return os;
+}
+
+std::ostream& operator<< (std::ostream& os, const opencl::DeviceInfo& device){
+  auto wifd = device.work_items_for_dims;
+  os <<  opencl::utils::device_type_str[device.type]
+     << "::" << device.name
+     << ", memory: " << (device.global_mem_size / 1024 / 1024) << "MB"
+     << ", address bits: " << device.address_bits
+     << ", max work group size: " << device.max_work_group_size
+     << ", work items: [" << wifd[0] << ", " << wifd[1] << ", " << wifd[2]
+     << "], image support: " << (device.image_support==CL_TRUE ? "YES" : "NO");
+  return os;
 }
 
 /*

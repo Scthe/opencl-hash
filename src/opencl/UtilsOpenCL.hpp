@@ -6,6 +6,8 @@
 namespace opencl {
 namespace utils {
 
+extern char const* device_type_str[9];
+
 /**
  * Loads a Program file and prepends the cPreamble to the code.
  * @param  cFilename     program filename
