@@ -97,8 +97,8 @@ public:
    * @param  size                     how much to read
    * @param  dst                      destination buffer
    * @param  block                    blocking/nonblocking operation switch
-   * @param  events_to_wait_for       wait for other operations to finish
-   * @param  events_to_wait_for_count
+   * @param  events_to_wait_for       [OPT]wait for other operations to finish
+   * @param  events_to_wait_for_count [OPT]
    * @return                          opencl event object
    */
   cl_event read_buffer(MemoryHandler*, size_t offset, size_t size, void *dst,
@@ -112,8 +112,8 @@ public:
     * @param  size                     how much to read
     * @param  src                      source buffer
     * @param  block                    blocking/nonblocking operation switch
-    * @param  events_to_wait_for       wait for other operations to finish
-    * @param  events_to_wait_for_count
+    * @param  events_to_wait_for       [OPT]wait for other operations to finish
+    * @param  events_to_wait_for_count [OPT]
     * @return                          opencl event object
     */
   cl_event write_buffer(MemoryHandler*, size_t offset, size_t size, void *src,

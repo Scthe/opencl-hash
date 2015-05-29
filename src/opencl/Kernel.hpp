@@ -34,8 +34,8 @@ class Kernel {
    *array
    *each value for one of dimensions
    * @param  local_work_size          :size_t*, work group size
-   * @param  events_to_wait_for       wait for other operations to finish
-   * @param  events_to_wait_for_count
+   * @param  events_to_wait_for       [OPT] wait for other operations to finish
+   * @param  events_to_wait_for_count [OPT]
    * @return                          opencl event object
    */
   cl_event execute(cl_uint work_dim,                //
