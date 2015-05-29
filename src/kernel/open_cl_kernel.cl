@@ -9,12 +9,8 @@ __constant int lookup[26] = {
 // TODO remove letters array
 __constant char letters[16] = {'a','c','d','e','g','i','l','m','n','o','p','r','s','t','u','w'};
 
-long hash(const char* c){
-	long h = 7;
-	for (unsigned int i = 0; i < LETTER_COUNT; i++) {
-		h = (h * 37 + lookup[c[i]-'a']);
-	}
-	return h;
+long hash_step(long previous_val, const char letter){
+	return previous_val * 37 + lookup[letter - 'a'];
 }
 
 __kernel
@@ -39,17 +35,23 @@ void main(__global char* target,
 		data[ii] = letters[(global_id >> (i * 4)) & 0xf];
 	}
 
+	// precalc hash for first base_idx letters
 	uint base_idx = letters_from_cpu_iter_i + letters_from_global_id;
+	long base_hash = 7;
+	for (unsigned int i = 0; i < base_idx; i++) {
+		base_hash = hash_step(base_hash, data[i]);
+	}
+
 	uint combinations = 1 << (4 * letters_to_iter_over);
 	for (uint i = 0; i < combinations; i++){
-		// fill out last letters
+		long hash_value = base_hash;
 		for (uint idx = 0; idx < letters_to_iter_over; idx++){
 			uint ii = base_idx + idx;
-			data[ii] = letters[(i >> (idx * 4)) & 0xf];
+			char letter = letters[(i >> (idx * 4)) & 0xf];
+			data[ii] = letter;
+			hash_value = hash_step(hash_value, letter);
 		}
 
-		// calculate hash
-		long hash_value = hash(data);
 		if( hash_value == target_hash){
 			// int old_value = atomic_cmpxchg(found_flag, 0, 1); // if none found before us
 			// if(old_value == 0){
