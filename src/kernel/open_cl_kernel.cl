@@ -15,7 +15,7 @@ long hash_step(long previous_val, const char letter){
 
 __kernel
 void main(__global char* target,
-					// __global int* found_flag,
+					__global int* found_flag,
 					long target_hash,
 					int letters_from_global_id,
 					int cpu_iter_i,
@@ -53,12 +53,12 @@ void main(__global char* target,
 		}
 
 		if( hash_value == target_hash){
-			// int old_value = atomic_cmpxchg(found_flag, 0, 1); // if none found before us
-			// if(old_value == 0){
+			int old_value = atomic_cmpxchg(found_flag, 0, 1); // if none found before us
+			if(old_value == 0){
 				for (uint i = 0; i < LETTER_COUNT; i++){
 					target[i] = data[i];
 				}
-			// }
+			}
 			break;
 		}
 	}
