@@ -32,6 +32,10 @@ void Kernel::push_arg(size_t arg_size, const void *arg_value) {
   ++arg_stack_size;
 }
 
+void Kernel::push_arg(const MemoryHandler *gpu_buf) {
+  this->push_arg(sizeof(cl_mem), (void *)&gpu_buf->handle);
+}
+
 cl_event Kernel::execute(cl_uint work_dim,                //
                          const size_t *global_work_size,  //
                          const size_t *local_work_size,   //
@@ -40,6 +44,10 @@ cl_event Kernel::execute(cl_uint work_dim,                //
   context->check_error(context->was_initialized(),
                        "Context was not initialized");
   check_work_parameters(work_dim, global_work_size, local_work_size);
+
+  // correct event parameters
+  if (!events_to_wait_for) events_to_wait_for_count = 0;
+  if (events_to_wait_for_count <= 0) events_to_wait_for = nullptr;
 
   arg_stack_size = 0;  // prepare for next invoke
   cl_command_queue *cmd_queue = context->command_queue();
@@ -72,15 +80,15 @@ void Kernel::check_work_parameters(cl_uint work_dim,  //
 
   auto device = context->device();
   long long device_work_id_range = ((long long)1) << device.address_bits;
-  long long real_global_work_size = 0,
-            real_local_work_size = 0;  // # of work-items in work-group
+  long long real_global_work_size = 1,
+            real_local_work_size = 1;  // # of work-items in work-group
   bool local_dims_lte_device_max = true,
        global_dims_divisible_by_local_dims = true;
 
   for (size_t i = 0; i < work_dim; i++) {
-    real_global_work_size += global_work_size[i];
+    real_global_work_size *= global_work_size[i];
     if (local_work_size) {
-      real_local_work_size += local_work_size[i];
+      real_local_work_size *= local_work_size[i];
       local_dims_lte_device_max &=
           local_work_size[i] <= device.work_items_for_dims[i];
       global_dims_divisible_by_local_dims &=

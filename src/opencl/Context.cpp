@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <stdexcept>
+#include <vector>
 
 #include "UtilsOpenCL.hpp"
 
@@ -18,8 +19,11 @@ MemoryHandler::MemoryHandler()
 }
 
 void MemoryHandler::release(){
-  if(!released && handle)
+  if(!released && handle){
     clReleaseMemObject(handle);
+    // auto ciErr1 = clReleaseMemObject(handle); // TODO check error
+    // check_error(ciErr1, "Error in MemoryHandler::release");
+  }
   released = true;
 }
 
@@ -107,8 +111,15 @@ void Context::check_error(bool check, char  const *msg){
 
 // execution
 
-MemoryHandler* Context::allocate(cl_mem_flags flags,
-                                 size_t size, void * host_ptr){
+void Context::block(){
+  cl_int ciErr1;
+  ciErr1 = clFlush(_clcommand_queue);
+  check_error(ciErr1, "Error during command queue flush during Context::block()");
+  ciErr1 = clFinish(_clcommand_queue);
+  check_error(ciErr1, "Error during clFinish during Context::block()");
+}
+
+MemoryHandler* Context::allocate(cl_mem_flags flags, size_t size){
   check_error(initialized, "Context was not initialized");
   check_error(_allocation_count < MAX_ALLOCATIONS_COUNT,
     "Wrapper hit allocations limit, increase MAX_ALLOCATIONS_COUNT");
@@ -116,7 +127,8 @@ MemoryHandler* Context::allocate(cl_mem_flags flags,
   cl_int ciErr1;
   MemoryHandler* k = _allocations + _allocation_count;
   ++_allocation_count;
-  k->handle = clCreateBuffer(_clcontext, flags, size, host_ptr, &ciErr1);
+  k->handle = clCreateBuffer(_clcontext, flags, size, nullptr, &ciErr1);
+  k->size = size;
   check_error(ciErr1, "Error in clCreateBuffer");
   return k;
 }
@@ -126,7 +138,8 @@ Kernel* Context::create_kernel(char const *file_path,
   check_error(initialized, "Context was not initialized");
   check_error(_kernel_count < MAX_KERNEL_COUNT,
     "Wrapper hit kernel limit, increase MAX_KERNEL_COUNT");
-  std::cout << "Reading kernel function from '" << file_path << "'" << std::endl;
+  std::cout << "Reading kernel function from '" << file_path << "' with args: '"
+            << (cmp_opt ? cmp_opt : "") << "'" << std::endl;
   cl_int ciErr1;
 
   Kernel* k = _kernels + _kernel_count;
@@ -151,11 +164,13 @@ Kernel* Context::create_kernel(char const *file_path,
   ciErr1 = clBuildProgram(program_id, 1, &_cldevice,
                           cmp_opt, nullptr, nullptr);
   if (ciErr1 == CL_BUILD_PROGRAM_FAILURE) {
-    size_t length;
     char buffer[2048];
     clGetProgramBuildInfo(program_id, _cldevice, CL_PROGRAM_BUILD_LOG,
-                          sizeof(buffer), buffer, &length);
-    std::cout << "--- Build log ---" << std::endl << buffer << std::endl;
+                          sizeof(buffer), buffer, nullptr);
+    std::cout << "******************************************" << std::endl
+              << "            --- Build log ---" << std::endl << std::endl
+              << buffer << std::endl
+              << "******************************************" << std::endl;
   }
   check_error(ciErr1, "Error in clBuildProgram");
 
@@ -178,6 +193,7 @@ cl_event Context::read_buffer(MemoryHandler* gpu_buffer,
                               cl_event* events_to_wait_for,
                               int events_to_wait_for_count){
   check_error(initialized, "Context was not initialized");
+  check_error(size <= gpu_buffer->size, "Tried to read more then is allocated");
   cl_event finish_token;
   cl_bool clblock = block? CL_TRUE : CL_FALSE;
   cl_mem gpu_memory_pointer = gpu_buffer->handle;
@@ -190,12 +206,20 @@ cl_event Context::read_buffer(MemoryHandler* gpu_buffer,
   return finish_token;
 }
 
-cl_event Context::write_buffer(MemoryHandler* gpu_buffer,
-                              size_t offset, size_t size, void *src,
-                              bool block,
+cl_event Context::read_buffer(MemoryHandler* gpu_buffer, void *dst, bool block,
                               cl_event* events_to_wait_for,
                               int events_to_wait_for_count){
+  return this->read_buffer(gpu_buffer, 0, gpu_buffer->size, dst, block,
+                           events_to_wait_for, events_to_wait_for_count);
+}
+
+cl_event Context::write_buffer(MemoryHandler* gpu_buffer,
+                               size_t offset, size_t size, void *src,
+                               bool block,
+                               cl_event* events_to_wait_for,
+                               int events_to_wait_for_count){
   check_error(initialized, "Context was not initialized");
+  check_error(size <= gpu_buffer->size, "Tried to write more then is allocated");
   cl_event finish_token;
   cl_bool clblock = block? CL_TRUE : CL_FALSE;
   cl_mem gpu_memory_pointer = gpu_buffer->handle;
@@ -206,6 +230,24 @@ cl_event Context::write_buffer(MemoryHandler* gpu_buffer,
     events_to_wait_for_count, events_to_wait_for, &finish_token); // sync events
   check_error(ciErr1, "Error in write buffer");
   return finish_token;
+}
+
+cl_event Context::write_buffer(MemoryHandler* gpu_buffer, void *src, bool block,
+                               cl_event* events_to_wait_for,
+                               int events_to_wait_for_count){
+  return this->write_buffer(gpu_buffer, 0, gpu_buffer->size, src, block,
+                            events_to_wait_for, events_to_wait_for_count);
+}
+
+cl_event Context::zeros_float(MemoryHandler* handler, bool block,
+                              cl_event* es, int event_count){
+  size_t len = handler->size / sizeof(float);
+  std::vector<float> v;
+  v.reserve(len);
+  for (size_t i = 0; i < len; i++) {
+    v.push_back(0.0f);
+  }
+  return this->write_buffer(handler, &v[0], block, es, event_count);
 }
 
 
@@ -293,7 +335,6 @@ void Context::platform_info(cl_platform_id platform_id,
 }
 
 void Context::device_info(cl_device_id device_id, DeviceInfo& info) {
-// https://www.khronos.org/registry/cl/sdk/1.0/docs/man/xhtml/clGetDeviceInfo.html
   cl_int ciErr1;
   size_t value_size = 0;
   ciErr1 =  clGetDeviceInfo(device_id, CL_DEVICE_GLOBAL_MEM_SIZE,

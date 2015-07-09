@@ -7,6 +7,7 @@ namespace opencl {
 
 // forward declaration
 class Context;
+struct MemoryHandler;
 
 class Kernel {
  public:
@@ -21,6 +22,14 @@ class Kernel {
    * @param arg_value void* pointer to argument value
    */
   void push_arg(size_t arg_size, const void *);
+
+  /**
+   * Set the next argument. To be used as a sequence of calls,
+   * where each one sets next argument.
+   *
+   * @param handle  gpu memory handler
+   */
+  void push_arg(const MemoryHandler *);
 
   /**
    * Execute the kernel with arguments that were pushed before this call.
@@ -42,6 +51,9 @@ class Kernel {
                    const size_t *global_work_size,  //
                    const size_t *local_work_size,   //
                    cl_event *events_to_wait_for = nullptr, int event_count = 0);
+
+  inline size_t get_max_work_group_size() const { return max_work_group_size; }
+  inline Context *get_context() const { return context; }
 
  private:
   /**

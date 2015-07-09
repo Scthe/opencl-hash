@@ -39,10 +39,10 @@ int main(int argc, char **argv) {
 
   // memory allocation - both CPU & GPU
   char cpu_buf[LETTER_COUNT+1] = {0,0,0, 0,0,0, 0,0,0, 0};
-  auto gpu_buf = context.allocate(CL_MEM_WRITE_ONLY, sizeof(cl_char) * LETTER_COUNT, nullptr);
+  auto gpu_buf = context.allocate(CL_MEM_WRITE_ONLY, sizeof(cl_char) * LETTER_COUNT);
   context.write_buffer(gpu_buf, 0, sizeof(cl_char) * LETTER_COUNT, cpu_buf, true);
   cl_int cpu_flag = 0;
-  auto gpu_flag = context.allocate(CL_MEM_READ_WRITE, sizeof(cl_int), nullptr);
+  auto gpu_flag = context.allocate(CL_MEM_READ_WRITE, sizeof(cl_int));
   context.write_buffer(gpu_flag, 0, sizeof(cl_int), (void*)&cpu_flag, true);
   std::cout << "cpu/gpu buffers pair allocated" << std::endl;
 
@@ -65,8 +65,8 @@ int main(int argc, char **argv) {
     }
 
     // kernel args
-    kernel->push_arg(sizeof(cl_mem), (void *)&gpu_buf->handle);
-    kernel->push_arg(sizeof(cl_mem), (void *)&gpu_flag->handle);
+    kernel->push_arg(gpu_buf);
+    kernel->push_arg(gpu_flag);
     kernel->push_arg(sizeof(cl_long),(void *)&target_hash);
     kernel->push_arg(sizeof(cl_int), (void *)&letters_from_global_id);
     kernel->push_arg(sizeof(cl_int), (void *)&i);
@@ -76,11 +76,11 @@ int main(int argc, char **argv) {
     cl_event finish_token = kernel->execute(1, &global_work_size, &local_work_size);
 
     // Synchronous/blocking read of results
-    context.read_buffer(gpu_flag, 0, sizeof(cl_int), (void *)&cpu_flag, true, &finish_token, 1);
+    context.read_buffer(gpu_flag, (void *)&cpu_flag, true, &finish_token, 1);
 
     // done
     if(cpu_flag){
-      context.read_buffer(gpu_buf, 0, sizeof(cl_char) * LETTER_COUNT, (void *)cpu_buf, true);
+      context.read_buffer(gpu_buf, (void *)cpu_buf, true);
       char* result_buffer = (char *)cpu_buf;
       result_buffer[LETTER_COUNT] = '\0';
       std::cout << std::endl << "found: '" << result_buffer << "'" << std::endl;

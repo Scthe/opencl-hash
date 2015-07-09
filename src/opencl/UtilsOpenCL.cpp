@@ -1,8 +1,13 @@
 #include <iostream>
 #include <stdio.h>
 #include <strings.h>
+#include <stdexcept>
 
 #include "UtilsOpenCL.hpp"
+#include "Kernel.hpp"
+#include "Context.hpp"
+
+size_t closest_power_of_2(int x);
 
 namespace opencl {
 namespace utils {
@@ -61,6 +66,45 @@ char *load_file(const char *cFilename, const char *cPreamble,
   return cSourceString;
 }
 
+///
+/// misc
+///
+void work_sizes(const opencl::Kernel &kernel, size_t *global_work_size,
+                size_t *local_work_size, size_t w, size_t h) {
+  auto context = kernel.get_context();
+  auto device = context->device();
+  auto max_local =
+      std::min(device.max_work_group_size, kernel.get_max_work_group_size());
+  auto max_device_local_size = device.work_items_for_dims;
+
+  // size_t max_local = 1024; // TESTS ONLY
+  // size_t max_device_local_size[2] = {128, 128}; // TESTS ONLY
+
+  global_work_size[0] = closest_power_of_2(static_cast<int>(w));
+  global_work_size[1] = closest_power_of_2(static_cast<int>(h));
+
+  // if picture dimension is smaller then max allowed local group dimension
+  // then just make it power of 2. Else we will use max value possible.
+  local_work_size[0] = w >= max_device_local_size[0] ? max_device_local_size[0]
+                                                     : closest_power_of_2(w);
+  local_work_size[1] = h >= max_device_local_size[1] ? max_device_local_size[1]
+                                                     : closest_power_of_2(h);
+
+  bool div_w = local_work_size[0] > local_work_size[1];
+  while (local_work_size[0] * local_work_size[1] > max_local) {
+    // note: we are decreasing only one of local_work_size for each iteration
+    local_work_size[0] /= div_w ? 2 : 1;
+    local_work_size[1] /= !div_w ? 2 : 1;
+    div_w = !div_w;
+  }
+
+  if (global_work_size[0] < local_work_size[0] ||
+      global_work_size[1] < local_work_size[1] || local_work_size[0] == 0 ||
+      local_work_size[1] == 0) {
+    throw std::runtime_error("Tried to create nonstandard work dimensions");
+  }
+}
+
 const char *get_opencl_error_str(cl_int errorCode) {
 #define DECLARE_ERROR(err) \
   case (err):              \
@@ -73,7 +117,7 @@ const char *get_opencl_error_str(cl_int errorCode) {
     DECLARE_ERROR(CL_COMPILER_NOT_AVAILABLE);
     DECLARE_ERROR(CL_MEM_OBJECT_ALLOCATION_FAILURE);
     case CL_OUT_OF_RESOURCES:
-      return "CL_OUT_OF_RESOURCES - watchdog exception"
+      return "CL_OUT_OF_RESOURCES - possible watchdog exception"
              "see f.e "
              "https://devtalk.nvidia.com/default/topic/471020/"
              "driver-crashs-while-opencl-app-is-running/";
@@ -134,4 +178,15 @@ const char *get_opencl_error_str(cl_int errorCode) {
 
 //
 }
+}
+
+size_t closest_power_of_2(int x) {
+  if (x < 0) return 0;
+  --x;
+  x |= x >> 1;
+  x |= x >> 2;
+  x |= x >> 4;
+  x |= x >> 8;
+  x |= x >> 16;
+  return static_cast<size_t>(x + 1);
 }
